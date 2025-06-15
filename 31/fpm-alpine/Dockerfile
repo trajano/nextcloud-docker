@@ -1,29 +1,54 @@
 # DO NOT EDIT: created by update.sh from Dockerfile-alpine.template
-FROM php:8.3-fpm-alpine3.22
+FROM alpine AS extract
+WORKDIR /usr/src/
+WORKDIR /var/www/html/
+RUN --mount=type=cache,target=/var/cache/apk apk -U add bzip2 gnupg 
+ADD "https://download.nextcloud.com/server/releases/nextcloud-31.0.7.tar.bz2" /var/www/html/nextcloud.tar.bz2
+ADD "https://download.nextcloud.com/server/releases/nextcloud-31.0.7.tar.bz2.asc" /var/www/html/nextcloud.tar.bz2.asc
+RUN set -ex; \
+    export GNUPGHOME="$(mktemp -d)"; \
+# gpg key from https://nextcloud.com/nextcloud.asc
+    gpg --batch --keyserver keyserver.ubuntu.com  --recv-keys 28806A878AE423A28372792ED75899B9A724937A; \
+    gpg --batch --verify nextcloud.tar.bz2.asc nextcloud.tar.bz2; \
+    tar -xjf nextcloud.tar.bz2 -C /usr/src/; \
+    gpgconf --kill all; \
+    rm nextcloud.tar.bz2.asc nextcloud.tar.bz2; \
+    rm -rf "$GNUPGHOME" /usr/src/nextcloud/updater; \
+    mkdir -p /usr/src/nextcloud/data; \
+    mkdir -p /usr/src/nextcloud/custom_apps; \
+    chmod +x /usr/src/nextcloud/occ;
+
+FROM caddy:builder AS caddy-builder
+RUN --mount=type=cache,target=/go/pkg/mod/cache xcaddy build \
+  --with github.com/caddyserver/caddy/v2=github.com/trajano/caddy/v2@otel-client \
+  --with github.com/caddyserver/cache-handler \
+  --with github.com/darkweak/storages/nuts/caddy \
+  --with github.com/darkweak/storages/redis/caddy
+
+FROM php:8.4-fpm-alpine3.22
+
+# Create the directories using Dockerfile rather than mkdir
+WORKDIR /var/www/data
+WORKDIR /docker-entrypoint-hooks.d/pre-installation
+WORKDIR /docker-entrypoint-hooks.d/post-installation
+WORKDIR /docker-entrypoint-hooks.d/pre-upgrade
+WORKDIR /docker-entrypoint-hooks.d/post-upgrade
+WORKDIR /docker-entrypoint-hooks.d/before-starting
+WORKDIR /var/www/html
 
 # entrypoint.sh and cron.sh dependencies
-RUN set -ex; \
-    \
-    apk add --no-cache \
-        imagemagick \
-        imagemagick-pdf \
-        imagemagick-jpeg \
-        imagemagick-raw \
-        imagemagick-tiff \
-        imagemagick-heic \
-        imagemagick-webp \
-        imagemagick-svg \
-        rsync \
-    ; \
-    \
+RUN --mount=type=cache,target=/var/cache/apk \
+    set -ex; \
     rm /var/spool/cron/crontabs/root; \
     echo '*/5 * * * * php -f /var/www/html/cron.php' > /var/spool/cron/crontabs/www-data
 
 # install the PHP extensions we need
 # see https://docs.nextcloud.com/server/stable/admin_manual/installation/source_installation.html
-RUN set -ex; \
+RUN --mount=type=cache,target=/var/cache/apk \
+    --mount=type=tmpfs,target=/tmp \
+    set -ex; \
     \
-    apk add --no-cache --virtual .build-deps \
+    apk add -U --virtual .build-deps \
         $PHPIZE_DEPS \
         autoconf \
         freetype-dev \
@@ -43,7 +68,7 @@ RUN set -ex; \
         postgresql-dev \
     ; \
     \
-    docker-php-ext-configure ftp --with-openssl-dir=/usr; \
+    docker-php-ext-configure ftp ; \
     docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp; \
     docker-php-ext-configure ldap; \
     docker-php-ext-install -j "$(nproc)" \
@@ -78,7 +103,6 @@ RUN set -ex; \
         memcached \
         redis \
     ; \
-    rm -r /tmp/pear; \
     \
     runDeps="$( \
         scanelf --needed --nobanner --format '%n#p' --recursive /usr/local/lib/php/extensions \
@@ -91,9 +115,9 @@ RUN set -ex; \
 
 # set recommended PHP.ini settings
 # see https://docs.nextcloud.com/server/latest/admin_manual/installation/server_tuning.html#enable-php-opcache
-ENV PHP_MEMORY_LIMIT 512M
-ENV PHP_UPLOAD_LIMIT 512M
-ENV PHP_OPCACHE_MEMORY_CONSUMPTION 128
+ENV PHP_MEMORY_LIMIT=512M
+ENV PHP_UPLOAD_LIMIT=512M
+ENV PHP_OPCACHE_MEMORY_CONSUMPTION=128
 RUN { \
         echo 'opcache.enable=1'; \
         echo 'opcache.interned_strings_buffer=32'; \
@@ -118,43 +142,33 @@ RUN { \
         echo 'post_max_size=${PHP_UPLOAD_LIMIT}'; \
     } > "${PHP_INI_DIR}/conf.d/nextcloud.ini"; \
     \
-    mkdir /var/www/data; \
-    mkdir -p /docker-entrypoint-hooks.d/pre-installation \
-             /docker-entrypoint-hooks.d/post-installation \
-             /docker-entrypoint-hooks.d/pre-upgrade \
-             /docker-entrypoint-hooks.d/post-upgrade \
-             /docker-entrypoint-hooks.d/before-starting; \
     chown -R www-data:root /var/www; \
     chmod -R g=u /var/www
 
 VOLUME /var/www/html
 
 
-ENV NEXTCLOUD_VERSION 31.0.7
+ENV NEXTCLOUD_VERSION=31.0.7
 
-RUN set -ex; \
-    apk add --no-cache --virtual .fetch-deps \
-        bzip2 \
-        gnupg \
-    ; \
-    \
-    curl -fsSL -o nextcloud.tar.bz2 "https://download.nextcloud.com/server/releases/nextcloud-31.0.7.tar.bz2"; \
-    curl -fsSL -o nextcloud.tar.bz2.asc "https://download.nextcloud.com/server/releases/nextcloud-31.0.7.tar.bz2.asc"; \
-    export GNUPGHOME="$(mktemp -d)"; \
-# gpg key from https://nextcloud.com/nextcloud.asc
-    gpg --batch --keyserver keyserver.ubuntu.com  --recv-keys 28806A878AE423A28372792ED75899B9A724937A; \
-    gpg --batch --verify nextcloud.tar.bz2.asc nextcloud.tar.bz2; \
-    tar -xjf nextcloud.tar.bz2 -C /usr/src/; \
-    gpgconf --kill all; \
-    rm nextcloud.tar.bz2.asc nextcloud.tar.bz2; \
-    rm -rf "$GNUPGHOME" /usr/src/nextcloud/updater; \
-    mkdir -p /usr/src/nextcloud/data; \
-    mkdir -p /usr/src/nextcloud/custom_apps; \
-    chmod +x /usr/src/nextcloud/occ; \
-    apk del --no-network .fetch-deps
+RUN --mount=type=cache,target=/var/cache/apk \
+    set -ex; \
+    apk add \
+        ffmpeg \
+        exiftool \
+        imagemagick \
+        imagemagick-pdf \
+        imagemagick-jpeg \
+        imagemagick-raw \
+        imagemagick-tiff \
+        imagemagick-heic \
+        imagemagick-webp \
+        imagemagick-svg \
+        rsync
 
+COPY --from=extract /usr/src/nextcloud/ /usr/src/nextcloud/
 COPY *.sh upgrade.exclude /
 COPY config/* /usr/src/nextcloud/config/
+COPY --from=caddy-builder /usr/bin/caddy /usr/bin/caddy
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["php-fpm"]
