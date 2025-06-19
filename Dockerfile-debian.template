@@ -76,17 +76,20 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
     --mount=type=tmpfs,target=/var/log/apt \
     set -ex; \
     apt-get update; \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
         busybox-static \
         bzip2 \
         libldap-common \
         libmagickcore-6.q16-6-extra \
         rsync \
         ffmpeg \
+        libgd3 \
         exiftool \
         libzip4 \
         libpq5 \
-        libmemcached11
+        libmemcached11; \
+    apt-get upgrade -y;
+
 
 FROM basepackages AS modules
 # Build the PHP modules.  This will not perform any intermediate image cleanup since
@@ -101,25 +104,22 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
     apt-get install -y --no-install-recommends \
         libcurl4-openssl-dev \
         libevent-dev \
-        libfreetype6-dev \
+        libgd-dev \
         libgmp-dev \
         libicu-dev \
-        libjpeg-dev \
         libldap2-dev \
         libmagickwand-dev \
         libmcrypt-dev \
         libmemcached-dev \
-        libpng-dev \
         libpq-dev \
-        libwebp-dev \
+        libssl-dev \
         libxml2-dev \
         libzip-dev
 
 RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-configure ftp 
+    docker-php-ext-configure ftp --with-ftp-ssl
 RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp
-
+    docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp --with-avif --with-external-gd --with-xpm
 RUN --mount=type=tmpfs,target=/tmp \
     set -ex; \
     debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)"; \
@@ -149,6 +149,9 @@ RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" pdo_pgsql
 RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" sysvsem
+
+RUN --mount=type=tmpfs,target=/tmp \
+    docker-php-ext-configure zip --with-zip
 RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" zip
 
