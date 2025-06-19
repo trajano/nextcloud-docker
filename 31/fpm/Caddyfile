@@ -80,13 +80,14 @@
 
 	@staticAssets {
 		method GET
-		path_regexp \.(css|js|mjs|mjs.map|svg|gif|png|jpg|webp|ico|wasm|tflite)$
+		path_regexp \.(css|js|mjs|map|svg|gif|png|jpg|webp|ico|wasm|tflite)$
 		file
 	}
 	handle @staticAssets {
 		# header Cache-Control "max-age=15778463, immutable"
 		cache {
 			mode bypass
+			default_cache_control "max-age=15778463, immutable"
 		}
 	}
 
@@ -98,6 +99,7 @@
 		# header Cache-Control "max-age=604800, immutable"
 		cache {
 			mode bypass
+			default_cache_control "max-age=604800, immutable"
 		}
 	}
 
