@@ -7,7 +7,7 @@ on:
 
 jobs:
   apache:
-    name: Build and push
+    name: Apache
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
@@ -23,13 +23,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Extract metadata (tags, labels) for Docker
-        id: meta-apache
+        id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/trajano/nextcloud
-          tags: |
-            type=pep440,pattern=apache-{{version}}
-            type=pep440,pattern={{version}}
+          flavor: |
+            prefix=apache
+          # tags: |
+          #   type=pep440,pattern=apache-{{version}}
+          #   type=pep440,pattern={{version}}
             
 
       - name: Build and push Docker image
@@ -38,10 +40,10 @@ jobs:
           context: 31/apache
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta-apache.outputs.tags }}
-          labels: ${{ steps.meta-apache.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
   fpm:
-    name: Build and push
+    name: FPM
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
@@ -57,13 +59,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Extract metadata (tags, labels) for Docker
-        id: meta-apache
+        id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/trajano/nextcloud
-          tags: |
-            type=pep440,pattern=fpm-{{version}}
-            type=pep440,pattern={{version}}
+          flavor: |
+            prefix=fpm
+          # tags: |
+          #   type=pep440,pattern=fpm-{{version}}
+          #   type=pep440,pattern={{version}}
             
 
       - name: Build and push Docker image
@@ -72,5 +76,5 @@ jobs:
           context: 31/fpm
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta-apache.outputs.tags }}
-          labels: ${{ steps.meta-apache.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
