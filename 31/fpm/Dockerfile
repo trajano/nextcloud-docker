@@ -228,6 +228,12 @@ COPY config/* /usr/src/nextcloud/config/
 COPY --from=caddy-builder --chmod=755 --chown=root:root /usr/bin/caddy /usr/bin/caddy
 COPY --from=precompile --chmod=0664 --chown=www-data:www-data /var/cache/php/opcache /var/cache/php/opcache
 COPY --chmod=0644 --chown=root:root Caddyfile /etc/caddy/Caddyfile
+
+COPY <<EOF /usr/local/etc/php-fpm.d/zzz-max-children.conf
+[www]
+pm.max_children = 20
+EOF
+
 RUN chown -R www-data:root /var/www;
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["php-fpm"]
