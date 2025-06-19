@@ -92,9 +92,9 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
     apt-get upgrade -y;
 
 
-FROM basepackages AS modules
+FROM php:8.4-fpm-bookworm AS modules
 # Build the PHP modules.  This will not perform any intermediate image cleanup since
-# only the /usr/local/lib/php will be copied
+# only the /usr/local/lib/php will be copied.  It also uses fpm variant since so that it can leverage the build cache better.
 
 # install the PHP extensions we need
 # see https://docs.nextcloud.com/server/stable/admin_manual/installation/source_installation.html
@@ -118,27 +118,22 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
         libzip-dev
 
 RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-configure ftp --with-ftp-ssl
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp --with-avif --with-external-gd --with-xpm
-RUN --mount=type=tmpfs,target=/tmp \
-    set -ex; \
-    debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)"; \
-    docker-php-ext-configure ldap --with-libdir="lib/$debMultiarch";
-
-RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" bcmath
 RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" exif
 RUN --mount=type=tmpfs,target=/tmp \
+    docker-php-ext-configure ftp --with-ftp-ssl && \
     docker-php-ext-install -j "$(nproc)" ftp
 RUN --mount=type=tmpfs,target=/tmp \
+    docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp --with-avif --with-gd --with-xpm && \
     docker-php-ext-install -j "$(nproc)" gd
 RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" gmp
 RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" intl
 RUN --mount=type=tmpfs,target=/tmp \
+    debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)" && \
+    docker-php-ext-configure ldap --with-libdir="lib/$debMultiarch" && \
     docker-php-ext-install -j "$(nproc)" ldap
 RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" opcache
@@ -152,8 +147,7 @@ RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" sysvsem
 
 RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-configure zip --with-zip
-RUN --mount=type=tmpfs,target=/tmp \
+    docker-php-ext-configure zip --with-zip && \
     docker-php-ext-install -j "$(nproc)" zip
 
 # pecl will claim success even if one install fails, so we need to perform each install separately

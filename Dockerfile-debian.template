@@ -117,17 +117,11 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
         libzip-dev
 
 RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-configure ftp --with-ftp-ssl
-RUN --mount=type=tmpfs,target=/tmp \
-    set -ex; \
-    debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)"; \
-    docker-php-ext-configure ldap --with-libdir="lib/$debMultiarch";
-
-RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" bcmath
 RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" exif
 RUN --mount=type=tmpfs,target=/tmp \
+    docker-php-ext-configure ftp --with-ftp-ssl && \
     docker-php-ext-install -j "$(nproc)" ftp
 RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp --with-avif --with-gd --with-xpm && \
@@ -137,6 +131,8 @@ RUN --mount=type=tmpfs,target=/tmp \
 RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" intl
 RUN --mount=type=tmpfs,target=/tmp \
+    debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)" && \
+    docker-php-ext-configure ldap --with-libdir="lib/$debMultiarch" && \
     docker-php-ext-install -j "$(nproc)" ldap
 RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" opcache
