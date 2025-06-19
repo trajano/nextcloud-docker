@@ -183,7 +183,7 @@ FROM devlibs AS module-gd
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp --with-avif --with-xpm && \
     docker-php-ext-install gd
 
-FROM php:8.4-fpm-bookworm AS module-gmp
+FROM devlibs AS module-gmp
 RUN docker-php-ext-install gmp
 
 FROM devlibs AS module-intl
@@ -207,11 +207,11 @@ FROM devlibs AS module-pdo_pgsql
 RUN docker-php-ext-install pdo_pgsql
 
 FROM php:8.4-fpm-bookworm AS module-sysvsem
-RUN docker-php-ext-install -j "$(nproc)" 
+RUN docker-php-ext-install sysvsem
 
 FROM devlibs AS module-zip
 RUN docker-php-ext-configure zip --with-zip && \
-    docker-php-ext-install -j "$(nproc)" zip
+    docker-php-ext-install zip
 
 FROM devlibs AS module-apcu
 RUN pecl install APCu-5.1.24 && \
@@ -234,19 +234,42 @@ RUN pecl install redis-6.2.0 --configureoptions 'enable-redis-igbinary="yes" ena
     docker-php-ext-enable redis
 
 FROM scratch AS modules2
-COPY --from=module-bcmath /usr/local/lib/php/ /usr/local/lib/php/
-COPY --from=module-bcmath /usr/local/etc/php/ /usr/local/etc/php/
-COPY --from=module-exif /usr/local/lib/php/ /usr/local/lib/php/
-COPY --from=module-exif /usr/local/etc/php/ /usr/local/etc/php/
-COPY --from=module-ftp /usr/local/lib/php/ /usr/local/lib/php/
-COPY --from=module-ftp /usr/local/etc/php/ /usr/local/etc/php/
-COPY --from=module-gd /usr/local/lib/php/ /usr/local/lib/php/
-COPY --from=module-gd /usr/local/etc/php/ /usr/local/etc/php/
-COPY --from=module-zip /usr/local/lib/php/ /usr/local/lib/php/
-COPY --from=module-zip /usr/local/etc/php/ /usr/local/etc/php/
-COPY --from=module-apcu /usr/local/lib/php/ /usr/local/lib/php/
-COPY --from=module-apcu /usr/local/etc/php/ /usr/local/etc/php/
-
+COPY --from=module-apcu /usr/local/lib/php/     /usr/local/lib/php/
+COPY --from=module-apcu /usr/local/etc/php/     /usr/local/etc/php/
+COPY --from=module-bcmath /usr/local/lib/php/   /usr/local/lib/php/
+COPY --from=module-bcmath /usr/local/etc/php/   /usr/local/etc/php/
+COPY --from=module-exif /usr/local/lib/php/     /usr/local/lib/php/
+COPY --from=module-exif /usr/local/etc/php/     /usr/local/etc/php/
+COPY --from=module-ftp /usr/local/lib/php/      /usr/local/lib/php/
+COPY --from=module-ftp /usr/local/etc/php/      /usr/local/etc/php/
+COPY --from=module-gd /usr/local/lib/php/       /usr/local/lib/php/
+COPY --from=module-gd /usr/local/etc/php/       /usr/local/etc/php/
+COPY --from=module-gmp /usr/local/lib/php/      /usr/local/lib/php/
+COPY --from=module-gmp /usr/local/etc/php/      /usr/local/etc/php/
+COPY --from=module-igbinary /usr/local/lib/php/ /usr/local/lib/php/
+COPY --from=module-igbinary /usr/local/etc/php/ /usr/local/etc/php/
+COPY --from=module-imagemagick /usr/local/lib/php/ /usr/local/lib/php/
+COPY --from=module-imagemagick /usr/local/etc/php/ /usr/local/etc/php/
+COPY --from=module-intl /usr/local/lib/php/     /usr/local/lib/php/
+COPY --from=module-intl /usr/local/etc/php/     /usr/local/etc/php/
+COPY --from=module-ldap /usr/local/lib/php/     /usr/local/lib/php/
+COPY --from=module-ldap /usr/local/etc/php/     /usr/local/etc/php/
+COPY --from=module-memcached /usr/local/lib/php/ /usr/local/lib/php/
+COPY --from=module-memcached /usr/local/etc/php/ /usr/local/etc/php/
+COPY --from=module-opcache /usr/local/lib/php/  /usr/local/lib/php/
+COPY --from=module-opcache /usr/local/etc/php/  /usr/local/etc/php/
+COPY --from=module-pcntl /usr/local/lib/php/    /usr/local/lib/php/
+COPY --from=module-pcntl /usr/local/etc/php/    /usr/local/etc/php/
+COPY --from=module-pdo_mysql /usr/local/lib/php/ /usr/local/lib/php/
+COPY --from=module-pdo_mysql /usr/local/etc/php/ /usr/local/etc/php/
+COPY --from=module-pdo_pgsql /usr/local/lib/php/ /usr/local/lib/php/
+COPY --from=module-pdo_pgsql /usr/local/etc/php/ /usr/local/etc/php/
+COPY --from=module-redis /usr/local/lib/php/     /usr/local/lib/php/
+COPY --from=module-redis /usr/local/etc/php/     /usr/local/etc/php/
+COPY --from=module-sysvsem /usr/local/lib/php/   /usr/local/lib/php/
+COPY --from=module-sysvsem /usr/local/etc/php/   /usr/local/etc/php/
+COPY --from=module-zip /usr/local/lib/php/       /usr/local/lib/php/
+COPY --from=module-zip /usr/local/etc/php/       /usr/local/etc/php/
 
 FROM --platform=$BUILDPLATFORM basepackages AS precompile
 COPY --from=modules /usr/local/lib/php/ /usr/local/lib/php/
