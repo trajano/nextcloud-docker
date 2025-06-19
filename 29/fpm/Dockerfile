@@ -117,7 +117,7 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
         libxml2-dev \
         libzip-dev
 
-FROM devlibs AS modules
+FROM devlibs AS modules-old
 
 RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" bcmath
@@ -233,7 +233,7 @@ FROM devlibs AS module-redis
 RUN pecl install redis-6.2.0 --configureoptions 'enable-redis-igbinary="yes" enable-redis-zstd="yes" enable-redis-lz4="yes"' && \
     docker-php-ext-enable redis
 
-FROM scratch AS modules2
+FROM scratch AS modules
 COPY --from=module-apcu /usr/local/lib/php/     /usr/local/lib/php/
 COPY --from=module-apcu /usr/local/etc/php/     /usr/local/etc/php/
 COPY --from=module-bcmath /usr/local/lib/php/   /usr/local/lib/php/
