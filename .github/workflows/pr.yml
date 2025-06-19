@@ -28,11 +28,9 @@ jobs:
         with:
           images: ghcr.io/trajano/nextcloud
           flavor: |
-            prefix=apache
-          # tags: |
-          #   type=pep440,pattern=apache-{{version}}
-          #   type=pep440,pattern={{version}}
-            
+            prefix=apache-
+          tags: |
+            type=ref,event=pr            
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -64,11 +62,9 @@ jobs:
         with:
           images: ghcr.io/trajano/nextcloud
           flavor: |
-            prefix=fpm
-          # tags: |
-          #   type=pep440,pattern=fpm-{{version}}
-          #   type=pep440,pattern={{version}}
-            
+            prefix=fpm-
+          tags: |
+            type=ref,event=pr            
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
