@@ -25,7 +25,7 @@ RUN --mount=type=cache,target=/go/pkg/mod/cache xcaddy build \
   --with github.com/darkweak/storages/nuts/caddy \
   --with github.com/darkweak/storages/redis/caddy
 
-FROM --platform=$BUILDPLATFORM php:8.4-apache-bookworm AS create-extra-files
+FROM scratch AS create-extra-files
 # To keep it simple just write in multiple layers
 
 # Create necessary folders using WORKDIR
@@ -92,7 +92,7 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
     apt-get upgrade -y;
 
 
-FROM php:8.4-fpm-bookworm AS modules
+FROM php:8.4-fpm-bookworm AS devlibs
 # Build the PHP modules.  This will not perform any intermediate image cleanup since
 # only the /usr/local/lib/php will be copied.  It also uses fpm variant since so that it can leverage the build cache better.
 
@@ -117,6 +117,8 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
         libxml2-dev \
         libzip-dev
 
+FROM devlibs AS modules
+
 RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" bcmath
 RUN --mount=type=tmpfs,target=/tmp \
@@ -125,7 +127,7 @@ RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-configure ftp --with-ftp-ssl && \
     docker-php-ext-install -j "$(nproc)" ftp
 RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp --with-avif --with-gd --with-xpm && \
+    docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp --with-avif --with-xpm && \
     docker-php-ext-install -j "$(nproc)" gd
 RUN --mount=type=tmpfs,target=/tmp \
     docker-php-ext-install -j "$(nproc)" gmp
@@ -165,6 +167,85 @@ RUN --mount=type=tmpfs,target=/tmp \
         memcached \
         redis \
     ;
+
+# Build modules in parallel note no -j since Docker will be splitting the builds already
+FROM php:8.4-fpm-bookworm AS module-bcmath
+RUN docker-php-ext-install bcmath
+
+FROM php:8.4-fpm-bookworm AS module-exif
+RUN docker-php-ext-install exif
+
+FROM devlibs AS module-ftp
+RUN docker-php-ext-configure ftp --with-ftp-ssl && \
+    docker-php-ext-install ftp
+
+FROM devlibs AS module-gd
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp --with-avif --with-xpm && \
+    docker-php-ext-install gd
+
+FROM php:8.4-fpm-bookworm AS module-gmp
+RUN docker-php-ext-install gmp
+
+FROM devlibs AS module-intl
+RUN docker-php-ext-install intl
+
+FROM devlibs AS module-ldap
+RUN debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)" && \
+    docker-php-ext-configure ldap --with-libdir="lib/$debMultiarch" && \
+    docker-php-ext-install ldap
+
+FROM php:8.4-fpm-bookworm AS module-opcache
+RUN docker-php-ext-install opcache
+
+FROM php:8.4-fpm-bookworm AS module-pcntl
+RUN docker-php-ext-install pcntl
+
+FROM devlibs AS module-pdo_mysql
+RUN docker-php-ext-install pdo_mysql
+
+FROM devlibs AS module-pdo_pgsql
+RUN docker-php-ext-install pdo_pgsql
+
+FROM php:8.4-fpm-bookworm AS module-sysvsem
+RUN docker-php-ext-install -j "$(nproc)" 
+
+FROM devlibs AS module-zip
+RUN docker-php-ext-configure zip --with-zip && \
+    docker-php-ext-install -j "$(nproc)" zip
+
+FROM devlibs AS module-apcu
+RUN pecl install APCu-5.1.24 && \
+    docker-php-ext-enable apcu
+
+FROM devlibs AS module-igbinary
+RUN pecl install igbinary-3.2.16 && \
+    docker-php-ext-enable igbinary
+
+FROM devlibs AS module-imagemagick
+RUN pecl install imagick-3.8.0 && \
+    docker-php-ext-enable imagick
+
+FROM devlibs AS module-memcached
+RUN pecl install memcached-3.3.0 --configureoptions 'enable-memcached-igbinary="yes"' && \
+    docker-php-ext-enable memcached
+
+FROM devlibs AS module-redis
+RUN pecl install redis-6.2.0 --configureoptions 'enable-redis-igbinary="yes" enable-redis-zstd="yes" enable-redis-lz4="yes"' && \
+    docker-php-ext-enable redis
+
+FROM scratch AS modules2
+COPY --from=module-bcmath /usr/local/lib/php/ /usr/local/lib/php/
+COPY --from=module-bcmath /usr/local/etc/php/ /usr/local/etc/php/
+COPY --from=module-exif /usr/local/lib/php/ /usr/local/lib/php/
+COPY --from=module-exif /usr/local/etc/php/ /usr/local/etc/php/
+COPY --from=module-ftp /usr/local/lib/php/ /usr/local/lib/php/
+COPY --from=module-ftp /usr/local/etc/php/ /usr/local/etc/php/
+COPY --from=module-gd /usr/local/lib/php/ /usr/local/lib/php/
+COPY --from=module-gd /usr/local/etc/php/ /usr/local/etc/php/
+COPY --from=module-zip /usr/local/lib/php/ /usr/local/lib/php/
+COPY --from=module-zip /usr/local/etc/php/ /usr/local/etc/php/
+COPY --from=module-apcu /usr/local/lib/php/ /usr/local/lib/php/
+COPY --from=module-apcu /usr/local/etc/php/ /usr/local/etc/php/
 
 
 FROM --platform=$BUILDPLATFORM basepackages AS precompile
