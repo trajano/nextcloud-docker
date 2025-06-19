@@ -43,27 +43,7 @@ COPY <<EOF /var/spool/cron/crontabs/www-data
 */5 * * * * php -f /var/www/html/cron.php
 EOF
 
-COPY <<EOF /tmp/conf.d/opcache-recommended.ini
-opcache.enable=1
-opcache.enable_cli=1
-opcache.interned_strings_buffer=32
-opcache.max_accelerated_files=10000
-opcache.memory_consumption=${PHP_OPCACHE_MEMORY_CONSUMPTION}
-opcache.save_comments=1
-opcache.file_cache=/var/cache/php/opcache
-opcache.revalidate_freq=60
-opcache.jit=1255
-opcache.jit_buffer_size=8M
-EOF
 
-COPY <<EOF /tmp/conf.d/docker-php-ext-apcu-ext.ini
-apc.enable_cli=1
-EOF
-
-COPY <<EOF /tmp/conf.d/docker-php-ext-igbinary-ext.ini
-apc.serializer=igbinary
-session.serialize_handler=igbinary
-EOF
 
 COPY <<EOF /tmp/conf.d/nextcloud.ini
 memory_limit=${PHP_MEMORY_LIMIT}
@@ -117,57 +97,6 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
         libxml2-dev \
         libzip-dev
 
-FROM devlibs AS modules-old
-
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-install -j "$(nproc)" bcmath
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-install -j "$(nproc)" exif
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-configure ftp --with-ftp-ssl && \
-    docker-php-ext-install -j "$(nproc)" ftp
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp --with-avif --with-xpm && \
-    docker-php-ext-install -j "$(nproc)" gd
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-install -j "$(nproc)" gmp
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-install -j "$(nproc)" intl
-RUN --mount=type=tmpfs,target=/tmp \
-    debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)" && \
-    docker-php-ext-configure ldap --with-libdir="lib/$debMultiarch" && \
-    docker-php-ext-install -j "$(nproc)" ldap
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-install -j "$(nproc)" opcache
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-install -j "$(nproc)" pcntl
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-install -j "$(nproc)" pdo_mysql
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-install -j "$(nproc)" pdo_pgsql
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-install -j "$(nproc)" sysvsem
-
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-configure zip --with-zip && \
-    docker-php-ext-install -j "$(nproc)" zip
-
-# pecl will claim success even if one install fails, so we need to perform each install separately
-RUN --mount=type=tmpfs,target=/tmp pecl install APCu-5.1.24
-RUN --mount=type=tmpfs,target=/tmp pecl install igbinary-3.2.16
-RUN --mount=type=tmpfs,target=/tmp pecl install imagick-3.8.0
-RUN --mount=type=tmpfs,target=/tmp pecl install memcached-3.3.0 --configureoptions 'enable-memcached-igbinary="yes"'
-RUN --mount=type=tmpfs,target=/tmp pecl install redis-6.2.0 --configureoptions 'enable-redis-igbinary="yes" enable-redis-zstd="yes" enable-redis-lz4="yes"'
-
-RUN --mount=type=tmpfs,target=/tmp \
-    docker-php-ext-enable \
-        apcu \
-        igbinary \
-        imagick \
-        memcached \
-        redis \
-    ;
-
 # Build modules in parallel note no -j since Docker will be splitting the builds already
 FROM php:8.4-fpm-bookworm AS module-bcmath
 RUN docker-php-ext-install bcmath
@@ -196,6 +125,18 @@ RUN debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)" && \
 
 FROM php:8.4-fpm-bookworm AS module-opcache
 RUN docker-php-ext-install opcache
+COPY <<EOF ${PHP_INI_DIR}/conf.d/opcache-recommended.ini
+opcache.enable=1
+opcache.enable_cli=1
+opcache.interned_strings_buffer=32
+opcache.max_accelerated_files=10000
+opcache.memory_consumption=${PHP_OPCACHE_MEMORY_CONSUMPTION}
+opcache.save_comments=1
+opcache.file_cache=/var/cache/php/opcache
+opcache.revalidate_freq=60
+opcache.jit=1255
+opcache.jit_buffer_size=8M
+EOF
 
 FROM php:8.4-fpm-bookworm AS module-pcntl
 RUN docker-php-ext-install pcntl
@@ -216,10 +157,17 @@ RUN docker-php-ext-configure zip --with-zip && \
 FROM devlibs AS module-apcu
 RUN pecl install APCu-5.1.24 && \
     docker-php-ext-enable apcu
+COPY <<EOF ${PHP_INI_DIR}/conf.d/docker-php-ext-apcu-ext.ini
+apc.enable_cli=1
+EOF
 
 FROM devlibs AS module-igbinary
 RUN pecl install igbinary-3.2.16 && \
     docker-php-ext-enable igbinary
+COPY <<EOF ${PHP_INI_DIR}/conf.d/docker-php-ext-igbinary-ext.ini
+apc.serializer=igbinary
+session.serialize_handler=igbinary
+EOF
 
 FROM devlibs AS module-imagemagick
 RUN pecl install imagick-3.8.0 && \
@@ -275,7 +223,8 @@ FROM --platform=$BUILDPLATFORM basepackages AS precompile
 COPY --from=modules /usr/local/lib/php/ /usr/local/lib/php/
 COPY --from=modules /usr/local/etc/php/ /usr/local/etc/php/
 # Skip include since we don't need the C headers
-COPY --from=extract /usr/src/nextcloud/ /usr/src/nextcloud/
+# The entrypoint copies /usr/src/nextcloud/ to /var/www/html/
+COPY --from=extract /usr/src/nextcloud/ /var/www/html/
 WORKDIR /var/cache/php/opcache
 
 RUN find /var/www/html \
