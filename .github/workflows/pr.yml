@@ -27,10 +27,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/trajano/nextcloud
-          flavor: |
-            prefix=apache-
           tags: |
-            type=ref,event=pr,prefix=apache-
+            type=ref,event=pr,suffix=-apache
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -63,10 +61,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/trajano/nextcloud
-          flavor: |
-            prefix=fpm-
           tags: |
-            type=ref,event=pr,prefix=fpm-
+            type=ref,event=pr,suffix=-fpm
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
