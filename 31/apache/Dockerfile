@@ -43,8 +43,6 @@ COPY <<EOF /var/spool/cron/crontabs/www-data
 */5 * * * * php -f /var/www/html/cron.php
 EOF
 
-
-
 COPY <<EOF /tmp/conf.d/nextcloud.ini
 memory_limit=${PHP_MEMORY_LIMIT}
 upload_max_filesize=${PHP_UPLOAD_LIMIT}
@@ -125,6 +123,8 @@ RUN debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)" && \
 
 FROM php:8.4-fpm-bookworm AS module-opcache
 RUN docker-php-ext-install opcache
+ENV PHP_OPCACHE_MEMORY_CONSUMPTION=128
+
 COPY <<EOF ${PHP_INI_DIR}/conf.d/opcache-recommended.ini
 opcache.enable=1
 opcache.enable_cli=1
@@ -228,17 +228,17 @@ COPY --from=extract /usr/src/nextcloud/ /var/www/html/
 WORKDIR /var/cache/php/opcache
 
 RUN find /var/www/html \
-    -type f \
-    -name "*.php" \
-    -exec php \
-        -d opcache.file_cache=/var/cache/php/opcache \
-        -d opcache.enable_file_override=0 \
-        -d opcache.file_cache_only=1 \
-        -d opcache.enable_cli=1 \
-        -d opcache.memory_consumption=1024 \
-        -d opcache.enable=1 \
-        -l  \
-        -f {} \;
+   -type f \
+   -name "*.php" -print0 | \
+   xargs -0 -n 1000 php \
+       -d memory_limit=2g \
+       -d opcache.file_cache=/var/cache/php/opcache \
+       -d opcache.enable_file_override=0 \
+       -d opcache.file_cache_only=1 \
+       -d opcache.enable_cli=1 \
+       -d opcache.memory_consumption=4096 \
+       -d opcache.enable=1 \
+       -l  
 
 FROM basepackages
 COPY --from=modules /usr/local/lib/php/ /usr/local/lib/php/
@@ -286,7 +286,7 @@ RUN { \
 ENV NEXTCLOUD_VERSION=31.0.7
 
 COPY --from=create-extra-files /var/spool/cron/crontabs/www-data /var/spool/cron/crontabs/www-data
-COPY --from=create-extra-files /tmp/conf.d/* ${PHP_INI_DIR}/conf.d/
+COPY --from=create-extra-files /tmp/conf.d/* /usr/local/php/etc/conf.d/
 COPY --chmod=0755 --chown=root:root *.sh /
 COPY --chmod=0644 --chown=root:root upgrade.exclude /
 COPY config/* /usr/src/nextcloud/config/
