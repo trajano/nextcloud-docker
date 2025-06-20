@@ -24,32 +24,6 @@ RUN --mount=type=cache,target=/go/pkg/mod/cache xcaddy build \
   --with github.com/darkweak/storages/nuts/caddy \
   --with github.com/darkweak/storages/redis/caddy
 
-FROM scratch AS create-extra-files
-# To keep it simple just write in multiple layers
-
-# Create necessary folders using WORKDIR
-WORKDIR /var/spool/cron/crontabs
-WORKDIR /tmp/conf.d
-
-# see https://docs.nextcloud.com/server/stable/admin_manual/installation/source_installation.html
-ENV PHP_MEMORY_LIMIT=512M
-ENV PHP_UPLOAD_LIMIT=512M
-ENV PHP_OPCACHE_MEMORY_CONSUMPTION=128
-
-# set recommended PHP.ini settings
-# see https://docs.nextcloud.com/server/latest/admin_manual/installation/server_tuning.html#enable-php-opcache
-COPY <<EOF /var/spool/cron/crontabs/www-data
-*/%%CRONTAB_INT%% * * * * php -f /var/www/html/cron.php
-EOF
-
-
-
-COPY <<EOF /tmp/conf.d/nextcloud.ini
-memory_limit=${PHP_MEMORY_LIMIT}
-upload_max_filesize=${PHP_UPLOAD_LIMIT}
-post_max_size=${PHP_UPLOAD_LIMIT}
-EOF
-
 FROM php:%%PHP_VERSION%%-%%VARIANT%%-%%DEBIAN_VERSION%% AS basepackages
 RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
     --mount=type=cache,target=/var/cache/apt,sharing=private \
@@ -70,6 +44,25 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
         libmemcached11; \
     apt-get upgrade -y;
 
+FROM php:%%PHP_VERSION%%-apache-%%DEBIAN_VERSION%% AS basepackages-apache
+RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
+    --mount=type=cache,target=/var/cache/apt,sharing=private \
+    --mount=type=tmpfs,target=/var/log/apt \
+    set -ex; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        busybox-static \
+        bzip2 \
+        libldap-common \
+        libmagickcore-6.q16-6-extra \
+        rsync \
+        ffmpeg \
+        libgd3 \
+        exiftool \
+        libzip4 \
+        libpq5 \
+        libmemcached11; \
+    apt-get upgrade -y;
 
 FROM php:%%PHP_VERSION%%-fpm-%%DEBIAN_VERSION%% AS devlibs
 # Build the PHP modules.  This will not perform any intermediate image cleanup since
@@ -124,6 +117,8 @@ RUN debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)" && \
 
 FROM php:%%PHP_VERSION%%-fpm-%%DEBIAN_VERSION%% AS module-opcache
 RUN docker-php-ext-install opcache
+ENV PHP_OPCACHE_MEMORY_CONSUMPTION=128
+
 COPY <<EOF ${PHP_INI_DIR}/conf.d/opcache-recommended.ini
 opcache.enable=1
 opcache.enable_cli=1
@@ -227,19 +222,133 @@ COPY --from=extract /usr/src/nextcloud/ /var/www/html/
 WORKDIR /var/cache/php/opcache
 
 RUN find /var/www/html \
-    -type f \
-    -name "*.php" \
-    -exec php \
-        -d opcache.file_cache=/var/cache/php/opcache \
-        -d opcache.enable_file_override=0 \
-        -d opcache.file_cache_only=1 \
-        -d opcache.enable_cli=1 \
-        -d opcache.memory_consumption=1024 \
-        -d opcache.enable=1 \
-        -l  \
-        -f {} \;
+   -type f \
+   -name "*.php" -print0 | \
+   xargs -0 -n 1000 php \
+       -d memory_limit=2g \
+       -d opcache.file_cache=/var/cache/php/opcache \
+       -d opcache.enable_file_override=0 \
+       -d opcache.file_cache_only=1 \
+       -d opcache.enable_cli=1 \
+       -d opcache.memory_consumption=4096 \
+       -d opcache.enable=1 \
+       -l  
 
-FROM basepackages
+FROM basepackages-apache AS nextcloud-apache
+
+COPY --from=modules /usr/local/lib/php/ /usr/local/lib/php/
+COPY --from=modules /usr/local/etc/php/ /usr/local/etc/php/
+# Skip include since we don't need the C headers
+COPY --from=extract /usr/src/nextcloud/ /usr/src/nextcloud/
+
+# Create the directories using Dockerfile rather than mkdir
+WORKDIR /var/www/data
+WORKDIR /var/log/php
+WORKDIR /docker-entrypoint-hooks.d/pre-installation
+WORKDIR /docker-entrypoint-hooks.d/post-installation
+WORKDIR /docker-entrypoint-hooks.d/pre-upgrade
+WORKDIR /docker-entrypoint-hooks.d/post-upgrade
+WORKDIR /docker-entrypoint-hooks.d/before-starting
+WORKDIR /var/www/html
+
+# install the PHP extensions we need
+# see https://docs.nextcloud.com/server/stable/admin_manual/installation/source_installation.html
+ENV PHP_MEMORY_LIMIT=512M
+ENV PHP_UPLOAD_LIMIT=512M
+ENV PHP_OPCACHE_MEMORY_CONSUMPTION=128
+
+# set recommended PHP.ini settings
+# see https://docs.nextcloud.com/server/latest/admin_manual/installation/server_tuning.html#enable-php-opcache
+
+VOLUME /var/www/html
+
+ENV APACHE_BODY_LIMIT=1073741824
+
+COPY <<EOT /etc/apache2/conf-available/apache-limits.conf
+LimitRequestBody \${APACHE_BODY_LIMIT}
+EOT
+
+COPY <<EOT /etc/apache2/conf-available/remoteip.conf
+RemoteIPHeader X-Real-IP
+RemoteIPInternalProxy 10.0.0.0/8
+RemoteIPInternalProxy 172.16.0.0/12
+RemoteIPInternalProxy 192.168.0.0/16
+EOT
+
+RUN a2enmod headers rewrite remoteip && \
+    a2enconf remoteip && \
+    a2enconf apache-limits
+
+ENV NEXTCLOUD_VERSION=%%VERSION%%
+
+COPY <<EOF /var/spool/cron/crontabs/www-data
+*/%%CRONTAB_INT%% * * * * php -f /var/www/html/cron.php
+EOF
+
+COPY <<EOF /usr/local/php/etc/conf.d/nextcloud.ini
+memory_limit=${PHP_MEMORY_LIMIT}
+upload_max_filesize=${PHP_UPLOAD_LIMIT}
+post_max_size=${PHP_UPLOAD_LIMIT}
+EOF
+
+COPY --chmod=0755 --chown=root:root *.sh /
+COPY --chmod=0644 --chown=root:root upgrade.exclude /
+COPY config/* /usr/src/nextcloud/config/
+COPY --from=precompile --chmod=0664 --chown=www-data:www-data /var/cache/php/opcache /var/cache/php/opcache
+
+RUN chown -R www-data:root /var/www;
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["apache2-foreground"]
+
+FROM basepackages AS nextcloud-fpm
+COPY --from=modules /usr/local/lib/php/ /usr/local/lib/php/
+COPY --from=modules /usr/local/etc/php/ /usr/local/etc/php/
+# Skip include since we don't need the C headers
+COPY --from=extract /usr/src/nextcloud/ /usr/src/nextcloud/
+
+# Create the directories using Dockerfile rather than mkdir
+WORKDIR /var/www/data
+WORKDIR /var/log/php
+WORKDIR /docker-entrypoint-hooks.d/pre-installation
+WORKDIR /docker-entrypoint-hooks.d/post-installation
+WORKDIR /docker-entrypoint-hooks.d/pre-upgrade
+WORKDIR /docker-entrypoint-hooks.d/post-upgrade
+WORKDIR /docker-entrypoint-hooks.d/before-starting
+WORKDIR /var/www/html
+
+# install the PHP extensions we need
+# see https://docs.nextcloud.com/server/stable/admin_manual/installation/source_installation.html
+ENV PHP_MEMORY_LIMIT=512M
+ENV PHP_UPLOAD_LIMIT=512M
+ENV PHP_OPCACHE_MEMORY_CONSUMPTION=128
+
+# set recommended PHP.ini settings
+# see https://docs.nextcloud.com/server/latest/admin_manual/installation/server_tuning.html#enable-php-opcache
+
+VOLUME /var/www/html
+
+ENV NEXTCLOUD_VERSION=%%VERSION%%
+
+COPY <<EOF /var/spool/cron/crontabs/www-data
+*/%%CRONTAB_INT%% * * * * php -f /var/www/html/cron.php
+EOF
+
+COPY <<EOF /usr/local/php/etc/conf.d/nextcloud.ini
+memory_limit=${PHP_MEMORY_LIMIT}
+upload_max_filesize=${PHP_UPLOAD_LIMIT}
+post_max_size=${PHP_UPLOAD_LIMIT}
+EOF
+
+COPY --chmod=0755 --chown=root:root *.sh /
+COPY --chmod=0644 --chown=root:root upgrade.exclude /
+COPY config/* /usr/src/nextcloud/config/
+COPY --from=precompile --chmod=0664 --chown=www-data:www-data /var/cache/php/opcache /var/cache/php/opcache
+
+RUN chown -R www-data:root /var/www;
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["php-fpm"]
+
+FROM basepackages AS nextcloud-caddy-fpm
 COPY --from=modules /usr/local/lib/php/ /usr/local/lib/php/
 COPY --from=modules /usr/local/etc/php/ /usr/local/etc/php/
 # Skip include since we don't need the C headers
@@ -269,8 +378,16 @@ VOLUME /var/www/html
 
 ENV NEXTCLOUD_VERSION=%%VERSION%%
 
-COPY --from=create-extra-files /var/spool/cron/crontabs/www-data /var/spool/cron/crontabs/www-data
-COPY --from=create-extra-files /tmp/conf.d/* ${PHP_INI_DIR}/conf.d/
+COPY <<EOF /var/spool/cron/crontabs/www-data
+*/%%CRONTAB_INT%% * * * * php -f /var/www/html/cron.php
+EOF
+
+COPY <<EOF /usr/local/etc/php/conf.d/nextcloud.ini
+memory_limit=${PHP_MEMORY_LIMIT}
+upload_max_filesize=${PHP_UPLOAD_LIMIT}
+post_max_size=${PHP_UPLOAD_LIMIT}
+EOF
+
 COPY --chmod=0755 --chown=root:root *.sh /
 COPY --chmod=0644 --chown=root:root upgrade.exclude /
 COPY config/* /usr/src/nextcloud/config/
