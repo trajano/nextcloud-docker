@@ -398,7 +398,7 @@ COPY <<EOF /var/spool/cron/crontabs/www-data
 */5 * * * * php -f /var/www/html/cron.php
 EOF
 
-COPY <<EOF /usr/local/php/etc/conf.d/nextcloud.ini
+COPY <<EOF /usr/local/etc/php/conf.d/nextcloud.ini
 memory_limit=${PHP_MEMORY_LIMIT}
 upload_max_filesize=${PHP_UPLOAD_LIMIT}
 post_max_size=${PHP_UPLOAD_LIMIT}
