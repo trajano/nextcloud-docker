@@ -1,0 +1,137 @@
+# docker run -v $PWD:/mnt caddy-custom caddy validate --config /mnt/Caddyfile
+{
+	# debug
+	servers {
+		trusted_proxies static {$TRUSTED_PROXIES:private_ranges}
+	}
+	cache {
+		key {
+			disable_scheme
+		}
+		# Redis was not used but rather Nuts on this example because 
+		# Raspberry Pis have limitted memory and SSDs are generally
+		# fast enough for family loads.
+		# redis {
+		# 	configuration {
+		# 		ClientName souin-redis
+		# 		InitAddress redis:6379
+		# 		SelectDB 1
+		# 	}
+		# }
+		nuts {
+			configuration {
+				Dir /data/nuts
+				EntryIdxMode 1
+				RWMode 0
+				SegmentSize 67108864
+				NodeNum 42
+				SyncEnable true
+				StartFileLoadingMode 1
+			}
+		}
+		ttl 5s
+		timeout {
+			backend 60s
+		}
+	}
+}
+
+:{$PORT:80} {
+	# For the most part this is a port of /var/www/html/.htaccess
+	# Some information from https://github.com/caddyserver/examples/blob/master/nextcloud/Caddyfile
+
+	root /var/www/html
+	encode
+
+	redir /.well-known/carddav /remote.php/dav 301
+	redir /.well-known/caldav /remote.php/dav 301
+	redir /.well-known/webfinger /index.php/.well-known/webfinger 301
+	redir /.well-known/nodeinfo /index.php/.well-known/nodeinfo 301
+
+	@dav_client_root {
+		header User-Agent *DavClnt*
+		path /
+	}
+	redir @dav_client_root /remote.php/dav 302
+
+	@forbidden {
+		path /.*
+		path /3rdparty/*
+		path /AUTHORS
+		path /autotest
+		path /build/*
+		path /composer-lock.json
+		path /composer.json
+		path /config/*
+		path /console
+		path /console.php
+		path /COPYING
+		path /data/*
+		path /db_*
+		path /lib/*
+		path /occ
+		path /package-lock.json
+		path /package.json
+		path /README
+		path /templates/*
+		path /tests/*
+	}
+	respond @forbidden 404
+
+	@staticAssets {
+		method GET
+		path_regexp \.(css|js|mjs|map|svg|gif|png|jpg|webp|ico|wasm|tflite)$
+		file
+	}
+	handle @staticAssets {
+		# header Cache-Control "max-age=15778463, immutable"
+		cache {
+			mode bypass
+			default_cache_control "max-age=15778463, immutable"
+		}
+	}
+
+	@fontAssets {
+		path_regexp \.(otf|woff2?)$
+		file
+	}
+	handle @fontAssets {
+		# header Cache-Control "max-age=604800, immutable"
+		cache {
+			mode bypass
+			default_cache_control "max-age=604800, immutable"
+		}
+	}
+
+	@vQuery {
+		# These are requests that have a version tag.  They are generally static
+		# but should be keyed to the session.
+		query v=*
+		not file
+	}
+	handle @vQuery {
+		# header Cache-Control "max-age=15778463, immutable"
+		cache {
+			mode bypass
+			key {
+				headers Cookie
+			}
+		}
+	}
+
+	handle_errors {
+		@403 expression `{err.status_code} == 403`
+		@404 expression `{err.status_code} == 404`
+		rewrite @403 /index.php/error/403
+		rewrite @404 /index.php/error/404
+	}
+
+	php_fastcgi {$NEXTCLOUD_UPSTREAM:localhost:9000} {
+		env front_controller_active true
+		header_down X-Trajano-Handled-By php_fastcgi
+		capture_stderr
+		fail_duration 5s
+		# This should match pm.max_children
+	}
+	file_server
+}
