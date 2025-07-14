@@ -43,12 +43,6 @@ COPY <<EOF /var/spool/cron/crontabs/www-data
 */5 * * * * php -f /var/www/html/cron.php
 EOF
 
-COPY <<EOF /tmp/conf.d/nextcloud.ini
-memory_limit=${PHP_MEMORY_LIMIT}
-upload_max_filesize=${PHP_UPLOAD_LIMIT}
-post_max_size=${PHP_UPLOAD_LIMIT}
-EOF
-
 FROM php:8.4-apache-bookworm AS basepackages
 RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=private \
     --mount=type=cache,target=/var/cache/apt,sharing=private \
@@ -297,6 +291,12 @@ COPY --chmod=0644 --chown=root:root Caddyfile /etc/caddy/Caddyfile
 COPY <<EOF /usr/local/etc/php-fpm.d/zzz-max-children.conf
 [www]
 pm.max_children = 20
+EOF
+
+COPY <<EOF /usr/local/etc/php/conf.d/nextcloud.ini
+memory_limit=${PHP_MEMORY_LIMIT}
+upload_max_filesize=${PHP_UPLOAD_LIMIT}
+post_max_size=${PHP_UPLOAD_LIMIT}
 EOF
 
 RUN chown -R www-data:root /var/www;
