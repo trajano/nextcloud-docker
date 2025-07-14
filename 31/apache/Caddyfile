@@ -1,0 +1,163 @@
+# docker run -v $PWD:/mnt caddy-custom caddy validate --config /mnt/Caddyfile
+{
+	#	debug
+	servers {
+		trusted_proxies static {$TRUSTED_PROXIES:private_ranges}
+	}
+	cache {
+		key {
+			disable_scheme
+		}
+		# Redis was not used but rather Nuts on this example because 
+		# Raspberry Pis have limitted memory and SSDs are generally
+		# fast enough for family loads.
+		redis {
+			configuration {
+				ClientName souin-redis
+				InitAddress redis:6379
+				SelectDB 1
+			}
+		}
+		# nuts {
+		# 	configuration {
+		# 		Dir /data/nuts
+		# 		EntryIdxMode 1
+		# 		RWMode 0
+		# 		SegmentSize 67108864  
+		# 		NodeNum 42
+		# 		SyncEnable true
+		# 		StartFileLoadingMode 1
+		# 	}
+		# }
+		ttl 5s
+		timeout {
+			backend 60s
+		}
+	}
+}
+
+:{$PORT:80} {
+	# For the most part this is a port of /var/www/html/.htaccess
+	# Some information from https://github.com/caddyserver/examples/blob/master/nextcloud/Caddyfile
+
+	root /var/www/html
+	encode
+
+	# Note these should be set on the Let's Encrypt facing server
+	# 	header {
+	# 		Strict-Transport-Security: "max-age=31536000; includeSubDomains;"
+	# 		Referrer-Policy "no-referrer-when-downgrade"
+	# 	}
+
+	# header {
+	# 	>Referrer-Policy "no-referrer"
+	# 	>X-Content-Type-Options "nosniff"
+	# 	>X-Download-Options "noopen"
+	# 	>X-Frame-Options "SAMEORIGIN"
+	# 	>X-Permitted-Cross-Domain-Policies "none"
+	# 	>X-Robots-Tag "noindex, nofollow"
+	# 	>X-XSS-Protection "1; mode=block"
+	# }
+
+	# @nextcloud_fallback {
+	# 	not path_regexp ^/(index|remote|public|cron|core/ajax/update|status|ocs/v[12]|updater/.+|ocs-provider/.+|.+/richdocumentscode(_arm64)?/proxy)
+	# }
+	# rewrite @nextcloud_fallback /index.php{uri}
+
+	# rewrite /remote/* /remote.php
+	redir /.well-known/carddav /remote.php/dav 301
+	redir /.well-known/caldav /remote.php/dav 301
+	redir /.well-known/webfinger /index.php/.well-known/webfinger 301
+	redir /.well-known/nodeinfo /index.php/.well-known/nodeinfo 301
+
+	# @login path /login
+	# header @login {
+	# 	>Referrer-Policy "same-origin"
+	# }
+
+	@dav_client_root {
+		header User-Agent *DavClnt*
+		path /
+	}
+	redir @dav_client_root /remote.php/dav 302
+
+	@forbidden {
+		path /.*
+		path /3rdparty/*
+		path /AUTHORS
+		path /autotest
+		path /build/*
+		path /composer-lock.json
+		path /composer.json
+		path /config/*
+		path /console
+		path /console.php
+		path /COPYING
+		path /data/*
+		path /db_*
+		path /lib/*
+		path /occ
+		path /package-lock.json
+		path /package.json
+		path /README
+		path /templates/*
+		path /tests/*
+	}
+	respond @forbidden 404
+
+	@staticAssets {
+		method GET
+		path_regexp \.(css|js|mjs|svg|gif|png|jpg|webp|ico|wasm|tflite)$
+		file
+	}
+	handle @staticAssets {
+		header Cache-Control "max-age=15778463, immutable"
+		cache {
+			mode bypass
+		}
+	}
+
+	# @fontAssets {
+	# 	path_regexp \.(otf|woff2?)$
+	# 	file
+	# }
+	# handle @fontAssets {
+	# 	header Cache-Control "max-age=604800"
+	# 	cache {
+	# 		mode bypass
+	# 	}
+	# }
+
+	@vQuery {
+		# These are requests that have a version tag.  They are generally static
+		# but should be keyed to the session.
+		query v=*
+		not file
+	}
+	handle @vQuery {
+		cache {
+			mode bypass
+			key {
+				headers Cookie
+			}
+		}
+	}
+
+	handle_errors {
+		@403 expression `{err.status_code} == 403`
+		@404 expression `{err.status_code} == 404`
+		rewrite @403 /index.php/error/403
+		rewrite @404 /index.php/error/404
+	}
+
+	php_fastcgi {$NEXTCLOUD_UPSTREAM:localhost:9000} {
+		# env modHeadersAvailable true
+		env front_controller_active true
+		# header_up requesttoken {>requesttoken}
+		header_down X-Trajano-Handled-By php_fastcgi
+	}
+	file_server {
+		# Do not automatically add / as these cause 401s
+		# disable_canonical_uris
+	}
+}

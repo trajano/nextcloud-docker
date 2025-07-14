@@ -1,0 +1,131 @@
+{
+	cache {
+		key {
+			disable_scheme
+		}
+		# Redis was not used but rather Nuts on this example because 
+		# Raspberry Pis have limitted memory and SSDs are generally
+		# fast enough for family loads.
+		nuts {
+			configuration {
+				Dir /data/nuts
+				EntryIdxMode 1
+				RWMode 0
+				SegmentSize 1024
+				NodeNum 42
+				SyncEnable true
+				StartFileLoadingMode 1
+			}
+		}
+	}
+}
+
+(route_to_nextcloud_fpm) {
+	root * /var/www/html
+
+	# Note only a single upstream will be used, it is expected that the 
+	# upstream will have DNS-RR if load balanced.
+	#
+	# The image can be configured to just do Caddy and upstream to multiple
+	# FPM backends.
+	php_fastcgi {$NEXTCLOUD_UPSTREAM:localhost:9000} {
+		header_up X-Real-IP {http.request.remote.host}
+		health_uri /ocs/v2.php/apps/serverinfo/api/v1/info
+		health_headers {
+			NC-Token {$NEXTCLOUD_TOKEN:somesecrettoken}
+		}
+	}
+	file_server
+	encode gzip zstd
+}
+:{$PORT:80} {
+	# For the most part this is a port of /var/www/html/.htaccess
+
+	# Note these should be set on the Let's Encrypt facing server
+	# 	header {
+	# 		Strict-Transport-Security: "max-age=31536000; includeSubDomains;"
+	# 		Referrer-Policy "no-referrer-when-downgrade"
+	# 	}
+
+	header {
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		X-Permitted-Cross-Domain-Policies "none"
+		X-Robots-Tag "noindex, nofollow"
+		X-XSS-Protection "1; mode=block"
+	}
+	rewrite /remote/* /remote.php
+	redir /.well-known/carddav /remote.php/dav 301
+	redir /.well-known/caldav /remote.php/dav 301
+	redir /.well-known/webfinger /index.php/.well-known/webfinger 301
+	redir /.well-known/nodeinfo /index.php/.well-known/nodeinfo 301
+	rewrite /.well-known/* /index.php
+
+	handle_path /push/* {
+		reverse_proxy {$NEXTCLOUD_NOTIFY_PUSH_URL:http://notify_push:7867}
+		# consider default of localhost:9000/push
+	}
+
+	@login path /login
+	header @login {
+		Referrer-Policy "same-origin"
+	}
+	@forbidden {
+		path /data/*
+		path /db_structure
+		path /AUTHORS
+		path /COPYING
+		path /README
+		path /package.json
+		path /package-lock.json
+		path /composer.json
+		path /composer-lock.json
+		path_regexp ^/(?:build|tests|config|lib|3rdparty|templates)/.*
+	}
+	respond @forbidden 404
+	@dotfiles path_regexp ^/(?:\.|autotest|occ|issue|indie|db_|console)
+	respond @dotfiles 404
+
+	@staticAssets {
+		path_regexp \.(css|js|mjs|svg|gif|png|jpg|webp|ico|wasm|tflite)$
+		file
+	}
+	handle @staticAssets {
+		header Cache-Control "max-age=15778463, immutable"
+		cache {
+			mode bypass_request
+		}
+	}
+	# At this point do the cache nuts
+
+	@fontAssets {
+		path_regexp \.(otf|woff2?)$
+		file
+	}
+	handle @fontAssets {
+		header Cache-Control "max-age=604800"
+		cache {
+			mode bypass_request
+		}
+	}
+	# At this point do the cache nuts
+
+	@vQuery {
+		# These are requests that have a version tag.  They are generally static
+		# but should be keyed to the session.
+		query v=*
+	}
+	handle @vQuery {
+		cache {
+		}
+	}
+
+	handle_errors {
+		@403 expression `{err.status_code} == 403`
+		@404 expression `{err.status_code} == 404`
+		rewrite @403 /index.php/error/403
+		rewrite @404 /index.php/error/404
+	}
+	import route_to_nextcloud_fpm
+}
