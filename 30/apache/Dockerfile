@@ -3,8 +3,8 @@ FROM --platform=$BUILDPLATFORM alpine AS extract
 WORKDIR /usr/src/
 WORKDIR /var/www/html/
 RUN --mount=type=cache,target=/var/cache/apk apk -U add bzip2 gnupg 
-ADD "https://download.nextcloud.com/server/releases/nextcloud-30.0.13.tar.bz2" /var/www/html/nextcloud.tar.bz2
-ADD "https://download.nextcloud.com/server/releases/nextcloud-30.0.13.tar.bz2.asc" /var/www/html/nextcloud.tar.bz2.asc
+ADD "https://download.nextcloud.com/server/releases/nextcloud-30.0.14.tar.bz2" /var/www/html/nextcloud.tar.bz2
+ADD "https://download.nextcloud.com/server/releases/nextcloud-30.0.14.tar.bz2.asc" /var/www/html/nextcloud.tar.bz2.asc
 RUN set -ex; \
     export GNUPGHOME="$(mktemp -d)"; \
 # gpg key from https://nextcloud.com/nextcloud.asc
@@ -149,7 +149,7 @@ RUN docker-php-ext-configure zip --with-zip && \
     docker-php-ext-install zip
 
 FROM devlibs AS module-apcu
-RUN pecl install APCu-5.1.24 && \
+RUN pecl install APCu-5.1.26 && \
     docker-php-ext-enable apcu
 COPY <<EOF ${PHP_INI_DIR}/conf.d/docker-php-ext-apcu-ext.ini
 apc.enable_cli=1
@@ -277,7 +277,7 @@ RUN { \
     } > /etc/apache2/conf-available/apache-limits.conf; \
     a2enconf apache-limits
 
-ENV NEXTCLOUD_VERSION=30.0.13
+ENV NEXTCLOUD_VERSION=30.0.14
 
 COPY --from=create-extra-files /var/spool/cron/crontabs/www-data /var/spool/cron/crontabs/www-data
 COPY --from=create-extra-files /tmp/conf.d/* /usr/local/php/etc/conf.d/

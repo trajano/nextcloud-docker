@@ -3,8 +3,8 @@ FROM alpine AS extract
 WORKDIR /usr/src/
 WORKDIR /var/www/html/
 RUN --mount=type=cache,target=/var/cache/apk apk -U add bzip2 gnupg 
-ADD "https://download.nextcloud.com/server/releases/nextcloud-31.0.7.tar.bz2" /var/www/html/nextcloud.tar.bz2
-ADD "https://download.nextcloud.com/server/releases/nextcloud-31.0.7.tar.bz2.asc" /var/www/html/nextcloud.tar.bz2.asc
+ADD "https://download.nextcloud.com/server/releases/nextcloud-31.0.8.tar.bz2" /var/www/html/nextcloud.tar.bz2
+ADD "https://download.nextcloud.com/server/releases/nextcloud-31.0.8.tar.bz2.asc" /var/www/html/nextcloud.tar.bz2.asc
 RUN set -ex; \
     export GNUPGHOME="$(mktemp -d)"; \
 # gpg key from https://nextcloud.com/nextcloud.asc
@@ -88,7 +88,7 @@ RUN --mount=type=cache,target=/var/cache/apk \
     ; \
     \
 # pecl will claim success even if one install fails, so we need to perform each install separately
-    pecl install APCu-5.1.24; \
+    pecl install APCu-5.1.26; \
     pecl install igbinary-3.2.16; \
     pecl install imagick-3.8.0; \
     pecl install memcached-3.3.0 \
@@ -148,7 +148,7 @@ RUN { \
 VOLUME /var/www/html
 
 
-ENV NEXTCLOUD_VERSION=31.0.7
+ENV NEXTCLOUD_VERSION=31.0.8
 
 RUN --mount=type=cache,target=/var/cache/apk \
     set -ex; \
