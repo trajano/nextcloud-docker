@@ -78,7 +78,6 @@ RUN --mount=type=cache,target=/var/cache/apk \
         gmp \
         intl \
         ldap \
-        opcache \
         pcntl \
         pdo_mysql \
         pdo_pgsql \
