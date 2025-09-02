@@ -89,7 +89,7 @@ if expr "$1" : "apache" 1>/dev/null; then
     fi
 fi
 
-if expr "$1" : "apache" 1>/dev/null || [ "$1" = "php-fpm" ] || [ "${NEXTCLOUD_UPDATE:-0}" -eq 1 ]; then
+if expr "$1" : "apache" 1>/dev/null || [ "$1" = "php-fpm" ] || [ "$1" = "caddy-php-fpm" ] || [ "${NEXTCLOUD_UPDATE:-0}" -eq 1 ]; then
     uid="$(id -u)"
     gid="$(id -g)"
     if [ "$uid" = '0' ]; then
@@ -307,4 +307,9 @@ if expr "$1" : "apache" 1>/dev/null || [ "$1" = "php-fpm" ] || [ "${NEXTCLOUD_UP
     run_path before-starting
 fi
 
-exec "$@"
+if [ "$1" = "caddy-php-fpm" ]; then
+    php-fpm &
+    exec caddy run --config /etc/caddy/Caddyfile
+else
+    exec "$@"
+fi

@@ -1,3 +1,17 @@
+# Archie's patches
+
+* Fix all the warnings on the Dockerfile
+* Use WORKDIR to create folders
+* Multistage builds to improve parallelism.
+* Add Caddy
+* PHP 8.4
+* pre build the opcache (this makes the image relatively large about 610MB larger)
+* Not be too concerned about creating many layers so long as the final image doesn't have as many.
+
+TODO single Dockerfile multiple targets
+
+
+
 ![GitHub last commit](https://img.shields.io/github/last-commit/nextcloud/docker)
 [![GitHub Release](https://img.shields.io/github/v/release/nextcloud/docker?link=https%3A%2F%2Fgithub.com%2Fnextcloud%2Fdocker%2Freleases%2Flatest&label=latest%20Image)](https://github.com/nextcloud/docker/releases/)
 [![Docker Image Version](https://img.shields.io/docker/v/library/nextcloud?sort=semver&logo=nextcloud&label=Nextcloud)](https://nextcloud.com/changelog/)
