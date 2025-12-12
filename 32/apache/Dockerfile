@@ -1,5 +1,5 @@
 # DO NOT EDIT: created by update.sh from Dockerfile-debian.template
-FROM php:8.3-apache-trixie AS usr-src
+FROM php:8.3-fpm-trixie AS usr-src
 RUN --mount=type=cache,sharing=locked,target=/var/lib/apt \
     --mount=type=cache,sharing=locked,target=/var/cache/apt \
     apt-get update -y && \
