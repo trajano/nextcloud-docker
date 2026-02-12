@@ -4,8 +4,8 @@ RUN --mount=type=cache,sharing=locked,target=/var/lib/apt \
     --mount=type=cache,sharing=locked,target=/var/cache/apt \
     apt-get update -y && \
     apt-get install -y gnupg dirmngr
-ADD https://github.com/nextcloud-releases/server/releases/download/v32.0.5/nextcloud-32.0.5.tar.bz2 nextcloud.tar.bz2
-ADD https://github.com/nextcloud-releases/server/releases/download/v32.0.5/nextcloud-32.0.5.tar.bz2.asc nextcloud.tar.bz2.asc
+ADD https://github.com/nextcloud-releases/server/releases/download/v32.0.6/nextcloud-32.0.6.tar.bz2 nextcloud.tar.bz2
+ADD https://github.com/nextcloud-releases/server/releases/download/v32.0.6/nextcloud-32.0.6.tar.bz2.asc nextcloud.tar.bz2.asc
 RUN tar -xjf nextcloud.tar.bz2 -C /usr/src/ && \
 # gpg key from https://nextcloud.com/nextcloud.asc
     gpg --batch --keyserver keyserver.ubuntu.com --recv-keys 28806A878AE423A28372792ED75899B9A724937A && \
@@ -169,7 +169,7 @@ RUN { \
     } > /etc/apache2/conf-available/apache-limits.conf; \
     a2enconf apache-limits
 
-ENV NEXTCLOUD_VERSION=32.0.5
+ENV NEXTCLOUD_VERSION=32.0.6
 COPY --from=usr-src /usr/src/ /usr/src/
 COPY *.sh upgrade.exclude /
 COPY config/* /usr/src/nextcloud/config/
