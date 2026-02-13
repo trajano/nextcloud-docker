@@ -1,10 +1,11 @@
-FROM php:%%PHP_VERSION%%-fpm-%%DEBIAN_VERSION%% AS usr-src
+# DO NOT EDIT: created by update.sh from Dockerfile-debian.template
+FROM php:8.4-fpm-trixie AS usr-src
 RUN --mount=type=cache,sharing=locked,target=/var/lib/apt \
     --mount=type=cache,sharing=locked,target=/var/cache/apt \
     apt-get update -y && \
     apt-get install -y gnupg dirmngr
-ADD %%DOWNLOAD_URL%% nextcloud.tar.bz2
-ADD %%DOWNLOAD_URL_ASC%% nextcloud.tar.bz2.asc
+ADD https://github.com/nextcloud-releases/server/releases/download/v33.0.0/nextcloud-33.0.0.tar.bz2 nextcloud.tar.bz2
+ADD https://github.com/nextcloud-releases/server/releases/download/v33.0.0/nextcloud-33.0.0.tar.bz2.asc nextcloud.tar.bz2.asc
 RUN tar -xjf nextcloud.tar.bz2 -C /usr/src/ && \
 # gpg key from https://nextcloud.com/nextcloud.asc
     gpg --batch --keyserver keyserver.ubuntu.com --recv-keys 28806A878AE423A28372792ED75899B9A724937A && \
@@ -14,7 +15,7 @@ RUN tar -xjf nextcloud.tar.bz2 -C /usr/src/ && \
     mkdir -p /usr/src/nextcloud/custom_apps && \
     chmod +x /usr/src/nextcloud/occ
 
-FROM php:%%PHP_VERSION%%-%%VARIANT%%-%%DEBIAN_VERSION%%
+FROM php:8.4-fpm-trixie
 
 # entrypoint.sh and cron.sh dependencies
 RUN set -ex; \
@@ -31,7 +32,7 @@ RUN set -ex; \
     apt-get dist-clean; \
     \
     mkdir -p /var/spool/cron/crontabs; \
-    echo '*/%%CRONTAB_INT%% * * * * php -f /var/www/html/cron.php' > /var/spool/cron/crontabs/www-data
+    echo '*/5 * * * * php -f /var/www/html/cron.php' > /var/spool/cron/crontabs/www-data
 
 # install the PHP extensions we need
 # see https://docs.nextcloud.com/server/stable/admin_manual/installation/source_installation.html
@@ -64,7 +65,7 @@ RUN --mount=type=cache,sharing=locked,target=/var/lib/apt \
     ; \
     \
     debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)"; \
-    docker-php-ext-configure ftp %%FTP_OPTIONS%%; \
+    docker-php-ext-configure ftp --with-ftp-ssl; \
     docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp; \
     docker-php-ext-configure ldap --with-libdir="lib/$debMultiarch"; \
     docker-php-ext-install -j "$(nproc)" \
@@ -83,13 +84,13 @@ RUN --mount=type=cache,sharing=locked,target=/var/lib/apt \
     ; \
     \
 # pecl will claim success even if one install fails, so we need to perform each install separately
-    pecl install APCu-%%APCU_VERSION%%; \
-    pecl install igbinary-%%IGBINARY_VERSION%%; \
-    pecl install imagick-%%IMAGICK_VERSION%%; \
+    pecl install APCu-5.1.28; \
+    pecl install igbinary-3.2.16; \
+    pecl install imagick-3.8.1; \
     pecl install --configureoptions 'enable-memcached-igbinary="yes"' \
-        memcached-%%MEMCACHED_VERSION%%; \
+        memcached-3.4.0; \
     pecl install --configureoptions 'enable-redis-igbinary="yes" enable-redis-zstd="yes" enable-redis-lz4="yes"' \
-        redis-%%REDIS_VERSION%%; \
+        redis-6.3.0; \
     \
     docker-php-ext-enable \
         apcu \
@@ -151,12 +152,12 @@ RUN { \
     chmod -R g=u /var/www
 
 VOLUME /var/www/html
-%%VARIANT_EXTRAS%%
 
-ENV NEXTCLOUD_VERSION=%%VERSION%%
+
+ENV NEXTCLOUD_VERSION=33.0.0
 COPY --from=usr-src /usr/src/ /usr/src/
 COPY *.sh upgrade.exclude /
 COPY config/* /usr/src/nextcloud/config/
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["%%CMD%%"]
+CMD ["php-fpm"]
