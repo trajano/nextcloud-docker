@@ -154,7 +154,7 @@ VOLUME /var/www/html
 %%VARIANT_EXTRAS%%
 
 ENV NEXTCLOUD_VERSION=%%VERSION%%
-COPY --from=usr-src /usr/src/ /usr/src/
+COPY --from=usr-src /usr/src/nextcloud/ /usr/src/nextcloud/
 COPY *.sh upgrade.exclude /
 COPY config/* /usr/src/nextcloud/config/
 
