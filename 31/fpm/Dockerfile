@@ -154,8 +154,37 @@ RUN { \
 VOLUME /var/www/html
 
 
+<<<<<<< HEAD
 ENV NEXTCLOUD_VERSION=31.0.14
 COPY --from=usr-src /usr/src/ /usr/src/
+=======
+ENV NEXTCLOUD_VERSION 31.0.14
+ADD https://github.com/nextcloud-releases/server/releases/download/v31.0.14/nextcloud-31.0.14.tar.bz2 nextcloud.tar.bz2
+ADD https://github.com/nextcloud-releases/server/releases/download/v31.0.14/nextcloud-31.0.14.tar.bz2.asc nextcloud.tar.bz2.asc
+RUN set -ex; \
+    fetchDeps=" \
+        gnupg \
+        dirmngr \
+    "; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends $fetchDeps; \
+    \
+    export GNUPGHOME="$(mktemp -d)"; \
+# gpg key from https://nextcloud.com/nextcloud.asc
+    gpg --batch --keyserver keyserver.ubuntu.com --recv-keys 28806A878AE423A28372792ED75899B9A724937A; \
+    gpg --batch --verify nextcloud.tar.bz2.asc nextcloud.tar.bz2; \
+    tar -xjf nextcloud.tar.bz2 -C /usr/src/; \
+    gpgconf --kill all; \
+    rm nextcloud.tar.bz2.asc nextcloud.tar.bz2; \
+    rm -rf "$GNUPGHOME" /usr/src/nextcloud/updater; \
+    mkdir -p /usr/src/nextcloud/data; \
+    mkdir -p /usr/src/nextcloud/custom_apps; \
+    chmod +x /usr/src/nextcloud/occ; \
+    \
+    apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false $fetchDeps; \
+    apt-get dist-clean
+
+>>>>>>> cf41fc0 (use ADD to downlowd the files)
 COPY *.sh upgrade.exclude /
 COPY config/* /usr/src/nextcloud/config/
 

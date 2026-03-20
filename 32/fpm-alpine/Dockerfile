@@ -146,7 +146,32 @@ RUN { \
 VOLUME /var/www/html
 
 
+<<<<<<< HEAD
 ENV NEXTCLOUD_VERSION=32.0.6
+=======
+ENV NEXTCLOUD_VERSION 32.0.6
+
+ADD https://github.com/nextcloud-releases/server/releases/download/v32.0.6/nextcloud-32.0.6.tar.bz2 nextcloud.tar.bz2
+ADD https://github.com/nextcloud-releases/server/releases/download/v32.0.6/nextcloud-32.0.6.tar.bz2.asc nextcloud.tar.bz2.asc
+RUN set -ex; \
+    apk add --no-cache --virtual .fetch-deps \
+        bzip2 \
+        gnupg \
+    ; \
+    \
+    export GNUPGHOME="$(mktemp -d)"; \
+# gpg key from https://nextcloud.com/nextcloud.asc
+    gpg --batch --keyserver keyserver.ubuntu.com  --recv-keys 28806A878AE423A28372792ED75899B9A724937A; \
+    gpg --batch --verify nextcloud.tar.bz2.asc nextcloud.tar.bz2; \
+    tar -xjf nextcloud.tar.bz2 -C /usr/src/; \
+    gpgconf --kill all; \
+    rm nextcloud.tar.bz2.asc nextcloud.tar.bz2; \
+    rm -rf "$GNUPGHOME" /usr/src/nextcloud/updater; \
+    mkdir -p /usr/src/nextcloud/data; \
+    mkdir -p /usr/src/nextcloud/custom_apps; \
+    chmod +x /usr/src/nextcloud/occ; \
+    apk del --no-network .fetch-deps
+>>>>>>> cf41fc0 (use ADD to downlowd the files)
 
 COPY --from=usr-src /usr/src/ /usr/src/
 COPY *.sh upgrade.exclude /
