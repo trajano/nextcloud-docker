@@ -5,8 +5,8 @@ RUN --mount=type=cache,sharing=locked,target=/var/lib/apt \
     --mount=type=cache,sharing=locked,target=/var/cache/apt \
     apt-get update -y && \
     apt-get install -y gnupg dirmngr
-ADD https://github.com/nextcloud-releases/server/releases/download/v33.0.2/nextcloud-33.0.2.tar.bz2 nextcloud.tar.bz2
-ADD https://github.com/nextcloud-releases/server/releases/download/v33.0.2/nextcloud-33.0.2.tar.bz2.asc nextcloud.tar.bz2.asc
+ADD https://github.com/nextcloud-releases/server/releases/download/v33.0.3/nextcloud-33.0.3.tar.bz2 nextcloud.tar.bz2
+ADD https://github.com/nextcloud-releases/server/releases/download/v33.0.3/nextcloud-33.0.3.tar.bz2.asc nextcloud.tar.bz2.asc
 RUN tar -xjf nextcloud.tar.bz2 -C /usr/src/ && \
 # gpg key from https://nextcloud.com/nextcloud.asc
     gpg --batch --keyserver keyserver.ubuntu.com --recv-keys 28806A878AE423A28372792ED75899B9A724937A && \
@@ -147,12 +147,12 @@ VOLUME /var/www/html
 
 
 <<<<<<< HEAD
-ENV NEXTCLOUD_VERSION=33.0.2
+ENV NEXTCLOUD_VERSION=33.0.3
 =======
-ENV NEXTCLOUD_VERSION 33.0.2
+ENV NEXTCLOUD_VERSION 33.0.3
 
-ADD https://github.com/nextcloud-releases/server/releases/download/v33.0.2/nextcloud-33.0.2.tar.bz2 nextcloud.tar.bz2
-ADD https://github.com/nextcloud-releases/server/releases/download/v33.0.2/nextcloud-33.0.2.tar.bz2.asc nextcloud.tar.bz2.asc
+ADD https://github.com/nextcloud-releases/server/releases/download/v33.0.3/nextcloud-33.0.3.tar.bz2 nextcloud.tar.bz2
+ADD https://github.com/nextcloud-releases/server/releases/download/v33.0.3/nextcloud-33.0.3.tar.bz2.asc nextcloud.tar.bz2.asc
 RUN set -ex; \
     apk add --no-cache --virtual .fetch-deps \
         bzip2 \
